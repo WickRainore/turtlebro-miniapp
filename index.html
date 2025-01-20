@@ -3,92 +3,119 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Robot Joystick</title>
+  <title>Joystick Controller</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
       margin: 0;
-      background-color: #f4f4f4;
+      background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
     }
+
     #joystick-container {
-      display: grid;
-      grid-template-rows: 1fr 1fr 1fr;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
+      position: relative;
       width: 200px;
       height: 200px;
-    }
-    .button {
-      width: 60px;
-      height: 60px;
-      background-color: #007bff;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      background-color: #ddd;
       border-radius: 50%;
-      font-size: 20px;
-      cursor: pointer;
-      user-select: none;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-    .button:active {
-      background-color: #0056b3;
+
+    #joystick {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background-color: #007bff;
+      border-radius: 50%;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+      transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
   <div id="joystick-container">
-    <div></div>
-    <div class="button" id="up">⬆️</div>
-    <div></div>
-    <div class="button" id="left">⬅️</div>
-    <div class="button" id="stop">⏹</div>
-    <div class="button" id="right">➡️</div>
-    <div></div>
-    <div class="button" id="down">⬇️</div>
-    <div></div>
+    <div id="joystick"></div>
   </div>
 
   <script>
-    const buttons = {
-      up: document.getElementById('up'),
-      down: document.getElementById('down'),
-      left: document.getElementById('left'),
-      right: document.getElementById('right'),
-      stop: document.getElementById('stop'),
+    // Переменные для стика
+    const joystick = document.getElementById("joystick");
+    const container = document.getElementById("joystick-container");
+
+    // Центр контейнера
+    const containerRect = container.getBoundingClientRect();
+    const containerCenter = {
+      x: containerRect.left + containerRect.width / 2,
+      y: containerRect.top + containerRect.height / 2,
     };
 
-    // Обработчик удержания кнопок
-    let commandInterval;
-    function sendCommand(command) {
-      // Отправка команды на сервер
-      fetch(`http://your_server_ip:your_server_port/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command }),
-      });
-    }
+    // Обработчики событий для движения стика
+    let isDragging = false;
 
-    function startCommand(command) {
-      sendCommand(command);
-      commandInterval = setInterval(() => sendCommand(command), 100); // Повторяем каждые 100 мс
-    }
-
-    function stopCommand() {
-      clearInterval(commandInterval);
-      sendCommand('stop'); // Останавливаем робота
-    }
-
-    // Привязка событий
-    Object.entries(buttons).forEach(([key, button]) => {
-      button.addEventListener('mousedown', () => startCommand(key));
-      button.addEventListener('mouseup', stopCommand);
-      button.addEventListener('mouseleave', stopCommand);
+    joystick.addEventListener("pointerdown", (event) => {
+      isDragging = true;
     });
+
+    document.addEventListener("pointermove", (event) => {
+      if (!isDragging) return;
+
+      const offsetX = event.clientX - containerCenter.x;
+      const offsetY = event.clientY - containerCenter.y;
+
+      // Ограничение движения стика в пределах круга
+      const distance = Math.sqrt(offsetX ** 2 + offsetY ** 2);
+      const maxDistance = containerRect.width / 2 - joystick.offsetWidth / 2;
+
+      let x = offsetX;
+      let y = offsetY;
+
+      if (distance > maxDistance) {
+        const angle = Math.atan2(offsetY, offsetX);
+        x = Math.cos(angle) * maxDistance;
+        y = Math.sin(angle) * maxDistance;
+      }
+
+      joystick.style.transform = `translate(${x}px, ${y}px)`;
+
+      // Отправка команды
+      sendCommand(x, y);
+    });
+
+    document.addEventListener("pointerup", () => {
+      isDragging = false;
+
+      // Возврат стика в центр
+      joystick.style.transform = "translate(-50%, -50%)";
+
+      // Отправка команды остановки
+      sendCommand(0, 0);
+    });
+
+    // Функция отправки команд на сервер
+    function sendCommand(x, y) {
+      // Преобразуем координаты в команды для робота
+      const command = {
+        forward: y < 0 ? Math.abs(y) : 0,
+        backward: y > 0 ? y : 0,
+        left: x < 0 ? Math.abs(x) : 0,
+        right: x > 0 ? x : 0,
+      };
+
+      // Отправка команды на сервер
+      fetch("http://192.168.0.101:5000/command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(command),
+      }).catch((error) => console.error("Ошибка отправки команды:", error));
+    }
   </script>
 </body>
 </html>
